@@ -70,8 +70,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		"""Show connection settings dialog"""
 		try:
 			# Get current braille driver
-			if braille.handler.display.name == "remBraille":
-				from brailleDisplayDrivers.remBraille import RemBrailleConnectionDialog
+			if braille.handler.display.name == "remBrailleDriver":
+				from brailleDisplayDrivers.remBrailleDriver import RemBrailleConnectionDialog
 				dialog = RemBrailleConnectionDialog(gui.mainFrame, braille.handler.display)
 				dialog.ShowModal()
 				dialog.Destroy()
@@ -92,7 +92,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def _on_connection_status(self, event):
 		"""Show connection status"""
 		try:
-			if braille.handler.display.name == "remBraille":
+			if braille.handler.display.name == "remBrailleDriver":
 				display = braille.handler.display
 				if display.connected:
 					message = _(
@@ -128,7 +128,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def _on_reconnect(self, event):
 		"""Reconnect to RemBraille host"""
 		try:
-			if braille.handler.display.name == "remBraille":
+			if braille.handler.display.name == "remBrailleDriver":
 				display = braille.handler.display
 				
 				# Show progress dialog
@@ -190,7 +190,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def script_rembraille_status(self, gesture):
 		"""Script to announce RemBraille connection status"""
 		try:
-			if braille.handler.display.name == "remBraille":
+			if braille.handler.display.name == "remBrailleDriver":
 				display = braille.handler.display
 				if display.connected:
 					message = _("RemBraille connected to {host} with {cells} cells").format(
@@ -214,7 +214,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def script_rembraille_reconnect(self, gesture):
 		"""Script to reconnect to RemBraille host"""
 		try:
-			if braille.handler.display.name == "remBraille":
+			if braille.handler.display.name == "remBrailleDriver":
 				display = braille.handler.display
 				
 				api.speakText(_("Reconnecting to RemBraille host"))
@@ -231,7 +231,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def getScript(self, gesture):
 		"""Get script for gesture"""
 		# Allow gesture passthrough for RemBraille-specific gestures
-		if gesture.source == "remBraille":
+		if gesture.source == "remBrailleDriver":
 			return None
 		
 		return super().getScript(gesture)

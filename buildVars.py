@@ -14,11 +14,11 @@ from site_scons.site_tools.NVDATool.utils import _
 # Add-on information variables
 addon_info = AddonInfo(
 	# add-on Name/identifier, internal for NVDA
-	addon_name="remBraille",
+	addon_name="remBrailleDriver",
 	# Add-on summary/title, usually the user visible name of the add-on
 	# Translators: Summary/title for this add-on
 	# to be shown on installation and add-on information found in add-on store
-	addon_summary=_("RemBraille"),
+	addon_summary=_("RemBraille Driver"),
 	# Add-on description
 	# Translators: Long description to be shown for this add-on on add-on information from add-on store
 	addon_description=_("""Provides braille display support for NVDA running in virtual machines by connecting to the host system's braille display via TCP.
@@ -43,8 +43,8 @@ Features:
 	addon_docFileName="readme.html",
 	# Minimum NVDA version supported (e.g. "2019.3.0", minor version is optional)
 	addon_minimumNVDAVersion="2023.1",
-	# Last NVDA version supported/tested (e.g. "2024.4.0", ideally more recent than minimum version)
-	addon_lastTestedNVDAVersion="2024.4",
+	# Last NVDA version supported/tested (e.g. "2025.2.0", ideally more recent than minimum version)
+	addon_lastTestedNVDAVersion="2025.2",
 	# Add-on update channel (default is None, denoting stable releases,
 	# and for development releases, use "dev".)
 	# Do not change unless you know what you are doing!
