@@ -177,6 +177,13 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 					# Use configured host IP
 					self._connect_to_host(self._hostIP, self._port)
 				else:
+					# Try localhost first (for debugging)
+					log.info("Attempting to connect to localhost for debugging")
+					if self._connect_to_host("127.0.0.1", self._port):
+						self._hostIP = "127.0.0.1"
+						self._save_settings()
+						return
+					
 					# Try to auto-detect host IP
 					host_ip = get_vm_host_ip()
 					if host_ip:

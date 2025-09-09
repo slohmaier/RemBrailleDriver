@@ -305,6 +305,9 @@ def suggest_host_ips() -> List[Tuple[str, str]]:
 	"""
 	suggestions = []
 	
+	# Add localhost first for debugging
+	suggestions.append(("127.0.0.1", "Localhost (for debugging/testing)"))
+	
 	# Add automatically detected IP if available
 	auto_ip = get_vm_host_ip()
 	if auto_ip:
