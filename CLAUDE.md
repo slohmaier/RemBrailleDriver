@@ -142,6 +142,42 @@ When asked to fix an error:
 3. Analyze the error and traceback to identify the issue
 4. Fix the code and rebuild
 
+## RemBraille Test Server
+
+The project includes `rembraille_server.py`, a dummy server for testing the NVDA add-on without a real braille display.
+
+### Starting the Server
+
+```bash
+# Start with defaults (port 17635, 40 cells)
+python3 rembraille_server.py
+
+# Custom port and cell count
+python3 rembraille_server.py --port 12345 --cells 80
+
+# Verbose mode for detailed output
+python3 rembraille_server.py --verbose
+```
+
+### Server Features
+
+- **Cross-platform**: Works on Windows, macOS, and Linux
+- **Unicode fallback**: Displays ASCII alternatives if Unicode isn't supported
+- **Interactive commands**: 
+  - `s` - Show server statistics
+  - `k` - Send test key event to connected clients
+  - `q` - Quit server
+  - `h` - Show help
+- **Real-time display**: Shows braille cells sent from NVDA in both Unicode braille and ASCII
+- **Connection monitoring**: Tracks client connections and message statistics
+
+### Testing Workflow
+
+1. Start the test server: `python3 rembraille_server.py`
+2. Configure NVDA to connect to your host IP and port 17635
+3. Select "RemBraille (VM Host Connection)" as braille display in NVDA
+4. Observe braille output in the server console as you navigate in NVDA
+
 ## GitHub Actions
 
 - **Automatic builds** on pull requests and tags
