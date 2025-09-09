@@ -21,15 +21,31 @@ import argparse
 import sys
 import signal
 import os
-from typing import Optional, Dict, Any
+import platform
+import re
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 
+# Terminal control functions
+def clear_screen():
+    """Clear the terminal screen"""
+    if platform.system() == 'Windows':
+        os.system('cls')
+    else:
+        os.system('clear')
+
+def move_cursor(row: int, col: int):
+    """Move cursor to specific position"""
+    if platform.system() != 'Windows':
+        sys.stdout.write(f'\033[{row};{col}H')
+    # Windows doesn't support ANSI escape codes well without special setup
+
 # Unicode fallback for terminals that don't support UTF-8
-def safe_print(text: str):
+def safe_print(text: str, end='\n'):
     """Print text with fallback for non-UTF-8 terminals"""
     try:
-        print(text)
+        print(text, end=end)
     except UnicodeEncodeError:
         # Replace Unicode characters with ASCII alternatives
         safe_text = text.replace("🚀", "[START]")
@@ -56,7 +72,9 @@ def safe_print(text: str):
         safe_text = safe_text.replace("👥", "[CLIENTS]")
         safe_text = safe_text.replace("💡", "[INFO]")
         safe_text = safe_text.replace("⠀", " ")  # Braille space
-        safe_print(safe_text)
+        # Replace all braille Unicode characters (U+2800-U+28FF) with dots or spaces
+        safe_text = re.sub(r'[\u2800-\u28FF]', '.', safe_text)
+        print(safe_text, end=end)
 
 
 # Protocol constants (matching the client)
@@ -135,6 +153,16 @@ class RemBrailleServer:
         self.clients: Dict[str, Any] = {}
         self.server_socket: Optional[socket.socket] = None
         
+        # Current braille display content
+        self.current_braille_cells: List[int] = []
+        self.current_braille_text = ""
+        self.current_ascii_text = ""
+        self.display_lock = threading.Lock()
+        
+        # Message log for scrolling display
+        self.message_log: List[str] = []
+        self.max_log_lines = 10
+        
         # Statistics
         self.stats = {
             'connections': 0,
@@ -142,6 +170,74 @@ class RemBrailleServer:
             'cells_displayed': 0,
             'start_time': None
         }
+    
+    def _add_message_to_log(self, message: str):
+        """Add a message to the scrolling log"""
+        with self.display_lock:
+            self.message_log.append(message)
+            if len(self.message_log) > self.max_log_lines:
+                self.message_log.pop(0)
+    
+    def _update_display(self):
+        """Update the static display with current stats and braille content"""
+        if not self.running:
+            return
+            
+        # Clear screen for fresh display
+        clear_screen()
+        
+        # Show title
+        safe_print("+" + "=" * 72 + "+")
+        safe_print("|              RemBraille Test Server - Live Monitor                  |")
+        safe_print("+" + "=" * 72 + "+")
+        safe_print("")
+        
+        # Show message log
+        safe_print("Recent Messages:")
+        safe_print("-" * 72)
+        for msg in self.message_log[-self.max_log_lines:]:
+            safe_print(msg[:72])  # Truncate long lines
+        
+        # Pad empty lines
+        for _ in range(self.max_log_lines - len(self.message_log)):
+            safe_print("")
+        
+        safe_print("-" * 72)
+        safe_print("")
+        
+        # Show stats box
+        uptime = datetime.now() - self.stats['start_time'] if self.stats['start_time'] else None
+        uptime_str = str(uptime).split('.')[0] if uptime else "00:00:00"
+        
+        safe_print("+" + "=" * 30 + " STATISTICS " + "=" * 30 + "+")
+        safe_print(f"| Port: {self.port:<6} | Cells: {self.num_cells:<3} | Uptime: {uptime_str:<8} | Clients: {len(self.clients):<3}    |")
+        safe_print(f"| Connections: {self.stats['connections']:<4} | Messages: {self.stats['messages_received']:<6} | Cells Displayed: {self.stats['cells_displayed']:<8} |")
+        safe_print("+" + "-" * 72 + "+")
+        safe_print("|                        CURRENT BRAILLE DISPLAY                       |")
+        safe_print("+" + "-" * 72 + "+")
+        
+        # Show current braille content
+        with self.display_lock:
+            if self.current_braille_text:
+                # Braille line
+                braille_line = f"| Braille: {self.current_braille_text[:60]:<60} |"
+                safe_print(braille_line)
+                # ASCII line
+                ascii_line = f"| ASCII:   {self.current_ascii_text[:60]:<60} |"
+                safe_print(ascii_line)
+                # Hex line if verbose
+                if self.verbose and self.current_braille_cells:
+                    hex_vals = ' '.join(f'{c:02X}' for c in self.current_braille_cells[:20])
+                    hex_line = f"| Hex:     {hex_vals[:60]:<60} |"
+                    safe_print(hex_line)
+            else:
+                safe_print("|                         (No content displayed)                       |")
+                if self.verbose:
+                    safe_print("|                                                                      |")
+        
+        safe_print("+" + "=" * 72 + "+")
+        safe_print("")
+        safe_print("Commands: [s]tats [k]ey test [q]uit [h]elp")
     
     def start(self):
         """Start the RemBraille server"""
@@ -167,12 +263,14 @@ class RemBrailleServer:
             self.running = True
             self.stats['start_time'] = datetime.now()
             
-            safe_print(f"🚀 RemBraille Dummy Server Started")
-            safe_print(f"📡 Listening on port {self.port}")
-            safe_print(f"📄 Simulating {self.num_cells} braille cells")
-            safe_print(f"🔧 Verbose mode: {'ON' if self.verbose else 'OFF'}")
-            safe_print(f"⏰ Started at: {self.stats['start_time'].strftime('%Y-%m-%d %H:%M:%S')}")
-            safe_print("=" * 60)
+            # Initial display
+            self._update_display()
+            
+            # Start display update thread
+            display_thread = threading.Thread(target=self._display_update_loop, daemon=True)
+            display_thread.start()
+            
+            self._add_message_to_log(f"[{datetime.now().strftime('%H:%M:%S')}] Server started on port {self.port}")
             
             while self.running:
                 try:
@@ -190,12 +288,17 @@ class RemBrailleServer:
                         break
         
         except Exception as e:
-            safe_print(f"❌ Failed to start server: {e}")
+            print(f"[ERROR] Failed to start server: {e}")
             sys.exit(1)
+    
+    def _display_update_loop(self):
+        """Background thread to update the display periodically"""
+        while self.running:
+            time.sleep(1)  # Update every second
+            self._update_display()
     
     def stop(self):
         """Stop the RemBraille server"""
-        safe_print("\n🛑 Shutting down RemBraille server...")
         self.running = False
         
         # Close all client connections
@@ -212,14 +315,15 @@ class RemBrailleServer:
             except:
                 pass
         
-        self._print_statistics()
+        # Clear screen and show final message
+        clear_screen()
         safe_print("✅ Server stopped successfully")
     
     def _handle_client(self, client_socket: socket.socket, address: tuple):
         """Handle a client connection"""
         client_id = f"{address[0]}:{address[1]}"
         
-        safe_print(f"🔌 New client connected: {client_id}")
+        self._add_message_to_log(f"[{datetime.now().strftime('%H:%M:%S')}] Client connected: {client_id}")
         self.stats['connections'] += 1
         
         self.clients[client_id] = {
@@ -257,7 +361,7 @@ class RemBrailleServer:
             
             if client_id in self.clients:
                 duration = (datetime.now() - self.clients[client_id]['connected_at']).total_seconds()
-                safe_print(f"🔌 Client disconnected: {client_id} (connected for {duration:.1f}s)")
+                self._add_message_to_log(f"[{datetime.now().strftime('%H:%M:%S')}] Client disconnected: {client_id} ({duration:.1f}s)")
                 del self.clients[client_id]
     
     def _receive_message(self, client_socket: socket.socket) -> Optional[RemBrailleMessage]:
@@ -306,60 +410,50 @@ class RemBrailleServer:
         timestamp = datetime.now().strftime("%H:%M:%S")
         msg_name = MSG_NAMES.get(message.msg_type, f"UNKNOWN({message.msg_type})")
         
-        safe_print(f"📨 [{timestamp}] {client_id} -> {msg_name}")
+        self._add_message_to_log(f"[{timestamp}] {client_id} -> {msg_name}")
         
         if message.msg_type == MSG_HANDSHAKE:
             client_info = message.data.decode('utf-8', errors='ignore')
-            safe_print(f"   🤝 Handshake from: {client_info}")
+            self._add_message_to_log(f"  Handshake: {client_info}")
             
             # Send handshake response
             response = RemBrailleMessage(MSG_HANDSHAKE_RESP, b"RemBraille_Dummy_Server_OK")
             self._send_message(client_socket, response)
-            safe_print(f"   ✅ Handshake response sent")
         
         elif message.msg_type == MSG_NUM_CELLS_REQ:
-            safe_print(f"   📏 Client requesting number of cells")
-            
             # Send number of cells
             cells_data = struct.pack("!H", self.num_cells)
             response = RemBrailleMessage(MSG_NUM_CELLS_RESP, cells_data)
             self._send_message(client_socket, response)
-            safe_print(f"   📏 Responded with {self.num_cells} cells")
+            self._add_message_to_log(f"  Sent cell count: {self.num_cells}")
         
         elif message.msg_type == MSG_DISPLAY_CELLS:
             cells = list(message.data)
             self.stats['cells_displayed'] += len(cells)
             
-            safe_print(f"   🔤 Displaying {len(cells)} braille cells:")
+            # Update current display content
+            with self.display_lock:
+                self.current_braille_cells = cells
+                self.current_braille_text = self._cells_to_braille(cells)
+                self.current_ascii_text = self._cells_to_ascii(cells)
             
-            # Convert cells to readable braille characters
-            braille_text = self._cells_to_braille(cells)
-            ascii_text = self._cells_to_ascii(cells)
-            
-            safe_print(f"   📝 Braille: {braille_text}")
-            safe_print(f"   📝 ASCII:   {ascii_text}")
-            
-            if self.verbose:
-                safe_print(f"   🔢 Raw:     {' '.join(f'{c:02X}' for c in cells)}")
+            self._add_message_to_log(f"  Display: {len(cells)} cells")
         
         elif message.msg_type == MSG_PING:
-            safe_print(f"   🏓 Ping received")
             # Send pong response
             pong = RemBrailleMessage(MSG_PONG)
             self._send_message(client_socket, pong)
             if self.verbose:
-                safe_print(f"   🏓 Pong sent")
+                self._add_message_to_log(f"  Ping/Pong")
         
         elif message.msg_type == MSG_KEY_EVENT:
             if len(message.data) >= 3:
                 key_id, event_type = struct.unpack("!HB", message.data[:3])
                 event_name = "PRESS" if event_type == KEY_DOWN else "RELEASE"
-                safe_print(f"   ⌨️  Key event: Key {key_id} {event_name}")
+                self._add_message_to_log(f"  Key: {key_id} {event_name}")
         
         else:
-            safe_print(f"   ❓ Unknown message type: {message.msg_type}")
-            if self.verbose and message.data:
-                safe_print(f"   📊 Data: {message.data[:50]}{'...' if len(message.data) > 50 else ''}")
+            self._add_message_to_log(f"  Unknown message type: {message.msg_type}")
     
     def _send_message(self, client_socket: socket.socket, message: RemBrailleMessage) -> bool:
         """Send message to client"""
@@ -378,7 +472,7 @@ class RemBrailleServer:
         for cell in cells:
             try:
                 if cell == 0:
-                    braille_text += "⠀"  # Blank braille cell
+                    braille_text += " "  # Blank braille cell (ASCII space)
                 else:
                     # Convert to Unicode braille (U+2800 + cell value)
                     braille_char = chr(0x2800 + cell)
@@ -406,28 +500,10 @@ class RemBrailleServer:
                     ascii_text += "?"
         return ascii_text
     
-    def _print_statistics(self):
-        """Print server statistics"""
-        if not self.stats['start_time']:
-            return
-        
-        uptime = datetime.now() - self.stats['start_time']
-        uptime_str = str(uptime).split('.')[0]  # Remove microseconds
-        
-        safe_print("\n" + "=" * 60)
-        safe_print("📊 RemBraille Server Statistics")
-        safe_print("=" * 60)
-        safe_print(f"⏱️  Uptime: {uptime_str}")
-        safe_print(f"🔌 Total connections: {self.stats['connections']}")
-        safe_print(f"📨 Messages received: {self.stats['messages_received']}")
-        safe_print(f"🔤 Braille cells displayed: {self.stats['cells_displayed']}")
-        safe_print(f"👥 Active clients: {len(self.clients)}")
-        safe_print("=" * 60)
-    
     def send_test_key_event(self, key_id: int = 100, is_press: bool = True):
         """Send a test key event to all connected clients"""
         if not self.clients:
-            safe_print("⚠️  No connected clients to send key event")
+            self._add_message_to_log("No connected clients to send key event")
             return
         
         event_type = KEY_DOWN if is_press else KEY_UP
@@ -435,13 +511,14 @@ class RemBrailleServer:
         key_data = struct.pack("!HB", key_id, event_type)
         message = RemBrailleMessage(MSG_KEY_EVENT, key_data)
         
-        safe_print(f"⌨️  Sending test key event: Key {key_id} {event_name}")
+        self._add_message_to_log(f"Sending test key: {key_id} {event_name}")
         
+        sent_count = 0
         for client_id, client_info in self.clients.items():
             if self._send_message(client_info['socket'], message):
-                safe_print(f"   ✅ Sent to {client_id}")
-            else:
-                safe_print(f"   ❌ Failed to send to {client_id}")
+                sent_count += 1
+        
+        self._add_message_to_log(f"  Sent to {sent_count}/{len(self.clients)} clients")
 
 
 def main():
@@ -524,14 +601,7 @@ Interactive commands while running:
             safe_print("❌ Failed to start server")
             return 1
         
-        # Interactive command loop
-        safe_print("\n💡 Interactive commands:")
-        safe_print("   's' + Enter: Show statistics")
-        safe_print("   'k' + Enter: Send test key event")  
-        safe_print("   'q' + Enter: Quit server")
-        safe_print("   'h' + Enter: Show this help")
-        safe_print("\n💡 Press Ctrl+C to quit\n")
-        
+        # Interactive command loop (input handled silently in the background)
         while server.running:
             try:
                 command = input().strip().lower()
@@ -539,20 +609,16 @@ Interactive commands while running:
                 if command == 'q':
                     break
                 elif command == 's':
-                    server._print_statistics()
+                    # Force display refresh
+                    server._update_display()
                 elif command == 'k':
                     server.send_test_key_event()
                 elif command == 'h':
-                    safe_print("\n💡 Available commands:")
-                    safe_print("   's': Show server statistics")
-                    safe_print("   'k': Send test key event to all clients")
-                    safe_print("   'q': Quit server")
-                    safe_print("   'h': Show this help")
-                    safe_print("")
+                    server._add_message_to_log("Commands: [s]tats refresh [k]ey test [q]uit")
                 elif command == '':
                     continue  # Ignore empty input
                 else:
-                    safe_print(f"❓ Unknown command: '{command}'. Type 'h' for help.")
+                    server._add_message_to_log(f"Unknown command: '{command}'.")
                     
             except (EOFError, KeyboardInterrupt):
                 safe_print("\n")
