@@ -231,7 +231,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def getScript(self, gesture):
 		"""Get script for gesture"""
 		# Allow gesture passthrough for RemBraille-specific gestures
-		if gesture.source == "remBrailleDriver":
+		if hasattr(gesture, 'source') and gesture.source == "remBrailleDriver":
 			return None
 		
 		return super().getScript(gesture)

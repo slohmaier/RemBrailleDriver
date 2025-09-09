@@ -170,20 +170,28 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 			log.error(f"Failed to save RemBraille settings: {e}")
 	
 	def _auto_connect(self):
-		"""Attempt automatic connection"""
-		if self._hostIP:
-			# Use configured host IP
-			self._connect_to_host(self._hostIP, self._port)
-		else:
-			# Try to auto-detect host IP
-			host_ip = get_vm_host_ip()
-			if host_ip:
-				self._hostIP = host_ip
-				self._save_settings()
-				self._connect_to_host(host_ip, self._port)
-			else:
-				# Show connection dialog
-				wx.CallAfter(self._show_connection_dialog, auto_connect=True)
+		"""Attempt automatic connection in background thread"""
+		def _auto_connect_thread():
+			try:
+				if self._hostIP:
+					# Use configured host IP
+					self._connect_to_host(self._hostIP, self._port)
+				else:
+					# Try to auto-detect host IP
+					host_ip = get_vm_host_ip()
+					if host_ip:
+						self._hostIP = host_ip
+						self._save_settings()
+						self._connect_to_host(host_ip, self._port)
+					else:
+						# Show connection dialog
+						wx.CallAfter(self._show_connection_dialog, auto_connect=True)
+			except Exception as e:
+				log.error(f"Error in auto-connect thread: {e}")
+		
+		# Run auto-connect in background thread to avoid blocking NVDA
+		auto_connect_thread = threading.Thread(target=_auto_connect_thread, daemon=True)
+		auto_connect_thread.start()
 	
 	def _connect_to_host(self, host_ip: str, port: int = REMBRAILLE_PORT) -> bool:
 		"""Connect to RemBraille host"""
@@ -203,10 +211,12 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 				self._port = port
 				self._save_settings()
 				
-				# Announce connection success
-				speech.speakMessage(_("RemBraille connected to {ip}:{port} with {cells} cells.").format(
-					ip=host_ip, port=port, cells=self.numCells
-				))
+				# Announce connection success (use CallAfter for thread safety)
+				def announce_success():
+					speech.speakMessage(_("RemBraille connected to {ip}:{port} with {cells} cells.").format(
+						ip=host_ip, port=port, cells=self.numCells
+					))
+				wx.CallAfter(announce_success)
 				
 				return True
 			else:
@@ -325,10 +335,6 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 			# Fallback: announce failure
 			if auto_connect:
 				speech.speakMessage(_("Could not auto-detect RemBraille host. Please configure the connection manually in NVDA Settings."))
-	
-	def check(self):
-		"""Check if the display is available"""
-		return self.connected and self.numCells > 0
 	
 	def display(self, cells: List[int]):
 		"""Display braille cells"""

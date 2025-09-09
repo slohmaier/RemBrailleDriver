@@ -47,3 +47,4 @@ Thumbs.db
 
 # Keep important directories but ignore their generated content
 addon/locale/**/LC_MESSAGES/*.mo
+temp_extract/

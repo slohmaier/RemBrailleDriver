@@ -121,6 +121,27 @@ act
 - Gateway analysis, ARP table parsing, network interface scanning
 - Platform-specific IP detection patterns
 
+## Debugging Workflow
+
+When debugging the RemBraille add-on:
+
+1. **Build the add-on**: Run `scons` to create the `.nvda-addon` file
+2. **Deploy to NVDA**: 
+   - Extract: `unzip -o remBrailleDriver-0.1.0.nvda-addon -d temp_extract`
+   - Remove old: `Remove-Item -Path 'C:\Users\stefan\AppData\Roaming\nvda\addons\remBrailleDriver' -Recurse -Force`
+   - Create dir: `New-Item -Path 'C:\Users\stefan\AppData\Roaming\nvda\addons\remBrailleDriver' -ItemType Directory -Force`
+   - Copy new: `Copy-Item -Path 'temp_extract\*' -Destination 'C:\Users\stefan\AppData\Roaming\nvda\addons\remBrailleDriver\' -Recurse -Force`
+3. **Start NVDA**: Launch NVDA with `powershell -Command "Start-Process 'C:\Program Files (x86)\NVDA\nvda.exe'"` and wait 5 seconds for initialization
+4. **Check logs**: Review the log file at `C:\Users\stefan\AppData\Local\Temp\nvda.log`
+
+### Log Analysis Process
+
+When asked to fix an error:
+1. First grep for "rembraille" in the log to find relevant entries
+2. When exceptions are found, grep around those lines for full context
+3. Analyze the error and traceback to identify the issue
+4. Fix the code and rebuild
+
 ## GitHub Actions
 
 - **Automatic builds** on pull requests and tags
