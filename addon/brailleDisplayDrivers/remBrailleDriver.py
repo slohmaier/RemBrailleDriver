@@ -162,7 +162,7 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 		try:
 			section = config.conf["braille"]["remBrailleDriver"]
 			section["hostIP"] = self._hostIP
-			section["port"] = self._port
+			section["port"] = int(self._port)
 			section["autoConnect"] = self.autoConnect
 			section["reconnectInterval"] = self.reconnectInterval
 			config.conf.save()
